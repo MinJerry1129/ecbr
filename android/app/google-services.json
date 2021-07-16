@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "533571580062",
+    "firebase_url": "https://economize-br-app.firebaseio.com",
+    "project_id": "economize-br-app",
+    "storage_bucket": "economize-br-app.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:533571580062:android:cca4b05bfd155b726f8b8f",
+        "android_client_info": {
+          "package_name": "com.economize.customer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "533571580062-fbr2m52v5qkf0vlqn0rp264flct4iad6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.economize.customer",
+            "certificate_hash": "24a46496a341790a01f80489235951f897608407"
+          }
+        },
+        {
+          "client_id": "533571580062-g5m5dvr0hbjrhao014ec0is3p2mqlb98.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB-Do7wW_y9g88h9DFIldvVOsvKOyFTA6M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "533571580062-g5m5dvr0hbjrhao014ec0is3p2mqlb98.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,5 @@
+const dataCurrent = () => {
+  //
+};
+
+export {dataCurrent};

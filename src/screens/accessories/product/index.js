@@ -1,0 +1,239 @@
+import React, { useState, useEffect } from 'react';
+import moment from 'moment';
+import { Modal } from 'react-native';
+import { connect } from 'react-redux';
+
+import { toastShow } from '../../../utils';
+import { getToCart } from '../../../store/actions/cart';
+import { isAuthenticated } from '../../../services/userAuth';
+import { listProductGroupCategory } from '../../../services/service/accessories';
+import { StorageSet, StorageGet } from '../../../services/deviceStorage';
+import { Container, BoxBtnCart, ViewLootie, LootieContainer } from './Styles';
+import { distanceLatLonInKm } from '../../../services/maps/distanceCoordinate';
+import { seacrhDeliveryAddress } from '../../../services/service/delivery/address';
+
+import Cart from '../cart';
+import Header from './components/header';
+import ProductList from './components/productList';
+import BtnCart from '../../../components/product/btnCart';
+import CompanyInformation from './components/companyInformation';
+import loaderLootie from '../../../assets/animations/loader.json';
+import ValidationLocation from '../../../components/validationLocation';
+import LocationCurrent from '../../../services/location/locationCurrent';
+
+const Product = ({
+  navigation,
+  route,
+  onGetToCart,
+  qtdProd,
+  price,
+  loading,
+  messageError,
+}) => {
+  const [minPrice, setMinPrice] = useState(0);
+  const [modalCart, setModalCart] = useState(false);
+  const [modalValidation, setModalValidation] = useState(false);
+  const [coupon, setcoupon] = useState(() => route.params?.coupon ?? null);
+  const [company, setCompany] = useState(() => route.params?.company ?? null);
+  const [products, setProducts] = useState(null);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+
+  useEffect(() => {
+    const onShow = async () => {
+      setLoadingProducts(true);
+      if (company !== null) {
+        if (
+          company.companyDelivery &&
+          company.companyDelivery.min_purchase &&
+          company.companyDelivery.min_purchase > 0
+        ) {
+          setMinPrice(company.companyDelivery.min_purchase);
+        }
+
+        StorageSet('company', company);
+        onGetToCart(company._id);
+        const result = await listProductGroupCategory({ company: company._id });
+
+        setProducts(result);
+      }
+      setLoadingProducts(false);
+    };
+
+    onShow();
+  }, [company, onGetToCart]);
+
+  const closeModal = () => {
+    setModalCart(false);
+  };
+
+  const getCoordinates = async () => {
+    const result = await LocationCurrent().getLocation();
+    if (result) {
+      return result;
+    }
+
+    return null;
+  };
+
+  const validateCoordinates = async () => {
+    const dateValidate = await StorageGet('DateValidadeLocation');
+
+    if (!dateValidate) {
+      await StorageSet(
+        'DateValidadeLocation',
+        moment(new Date(), 'YYYY-MM-DD HH:mm:ss')
+          .utc()
+          .subtract(3, 'hours'),
+      );
+    } else {
+      await StorageSet(
+        'DateValidadeLocation',
+        moment(new Date(), 'YYYY-MM-DD HH:mm:ss')
+          .utc()
+          .subtract(3, 'hours'),
+      );
+
+      const dateInit = moment(dateValidate, 'YYYY-MM-DD HH:mm:ss')
+        .utc()
+        .subtract(3, 'hours');
+
+      const dateFinish = moment(new Date(), 'YYYY-MM-DD HH:mm:ss')
+        .utc()
+        .subtract(3, 'hours');
+
+      const duration = moment.duration(dateFinish.diff(dateInit));
+      const hours = duration.asHours();
+
+      if (hours <= 1) {
+        return true;
+      }
+    }
+
+    const coordinatesLocal = await getCoordinates();
+
+    if (coordinatesLocal) {
+      const response = await isAuthenticated();
+      const addressUser = await seacrhDeliveryAddress({
+        customer: response.user._id,
+        main: true,
+      });
+
+      if (!addressUser || addressUser.length === 0) {
+        navigation.navigate('Customer', {
+          screen: 'CustomerAddress',
+        });
+      }
+
+      const distKm = distanceLatLonInKm(coordinatesLocal, {
+        latitude: addressUser[0].location.coordinates[0],
+        longitude: addressUser[0].location.coordinates[1],
+      });
+
+      if (distKm && distKm !== '') {
+        let number = distKm.toFixed(2);
+        if (number > 1 || (distKm * 1000).toFixed(0) > 100) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const cartScreen = async () => {
+    if (qtdProd > 0) {
+      const result = await validateCoordinates();
+      if (result) {
+        setModalCart(true);
+      } else {
+        setModalValidation(true);
+      }
+    } else {
+      toastShow('O seu carrinho está vazio', 'ALERT');
+    }
+  };
+
+  useEffect(() => {
+    if (messageError && messageError.message) {
+      toastShow(messageError.message, 'ALERT');
+    }
+  }, [messageError]);
+
+  return (
+    <Container>
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={modalCart}
+        onRequestClose={() => setModalCart(false)}>
+        <Cart close={closeModal} navigation={navigation} coupon={coupon} />
+      </Modal>
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalValidation}
+        onRequestClose={() => setModalValidation(false)}>
+        <ValidationLocation
+          statusModal={setModalValidation}
+          navigation={navigation}
+        />
+      </Modal>
+      <Header navigation={navigation} company={company} />
+      <CompanyInformation company={company} />
+      {loadingProducts ? (
+        <LootieContainer>
+          <ViewLootie
+            source={loaderLootie}
+            resizeMode="contain"
+            loop
+            autoPlay
+          />
+        </LootieContainer>
+      ) : products !== null ? (
+        <ProductList
+          navigation={navigation}
+          company={company}
+          products={products}
+        />
+      ) : null}
+      <BoxBtnCart>
+        {qtdProd >= 0 ? (
+          <BtnCart
+            onPress={cartScreen}
+            qtd={qtdProd}
+            price={price}
+            loading={loading}
+            remainingPrice={minPrice > 0 ? minPrice - price : 0}
+          />
+        ) : null}
+      </BoxBtnCart>
+    </Container>
+  );
+};
+
+const mapStateToProps = ({ cart }) => {
+  let cartResult = cart.cart ? cart.cart : [];
+  return {
+    loading: cart.loading,
+    qtdProd: cartResult.length,
+    price: cart.subTotal,
+    messageError: cart?.messageError ?? null,
+  };
+};
+
+const mapDispatchToProps = dispatch => {
+  return {
+    onGetToCart: company =>
+      dispatch(
+        getToCart(company, {
+          type: 'accessories',
+          delivery: true,
+        }),
+      ),
+  };
+};
+
+export default connect(
+  mapStateToProps,
+  mapDispatchToProps,
+)(Product);

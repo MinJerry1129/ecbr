@@ -1,0 +1,132 @@
+#!/bin/bash
+
+# BUILD RELEASE WITHOUT DEVELOPER MERGE
+
+# PARA NOVOS SH -> chmod a+x fileName
+
+# variables
+path="/home/home/ecbr/user"
+path_apk="/android/app/build/outputs/apk"
+path_build_gradle="${path}/android/app/build.gradle"
+path_config="${path}/src/config/index.js"
+path_package="${path}/package.json"
+
+echo -e "::: INICIANDO BUILD SEM MERGE COM DEVELOPER! \n\nSelecione um tipo:"
+
+select type in homologation production
+do
+echo "Iniciando build do tipo: $type"
+break;
+done
+
+cd $path
+pwd
+
+echo VERSAO ATUAL:
+jq -r .version $path_package
+
+# Alterar versão do android
+echo "ALTERAR VERSAO DO PRODUTO?"
+select alterVersionApp in SIM NAO
+do
+echo "Iniciando build do tipo: $type"
+break;
+done
+
+if [ $alterVersionApp = 'SIM' ]; then
+  echo VERSAO ATUAL:
+  jq -r .version $path_package
+  echo DIGITE O versionCode Atual
+  read versionCodeAtual
+  echo DIGITE O versionName Atual
+  read versionNameAtual
+  echo DIGITE O versionCode Novo
+  read versionCodeNew
+  echo DIGITE O versionName Novo
+  read versionNameNew
+
+  echo "VersionCode novo: $versionCodeNew, VersionName novo: $versionNameNew. Confirma?"
+  select confirmAlterVersionApp in SIM NAO
+  do
+  if [ $confirmAlterVersionApp = 'SIM' ]; then
+    echo Enable Spearate Build
+    # replace "versionCode $versionCodeAtual" "versionCode $versionCodeNew" -- $path_build_gradle
+    sed -i "s/versionCode $versionCodeAtual/versionCode $versionCodeNew/g" $path_build_gradle
+    # replace "versionName \"$versionNameAtual\"" "versionName \"$versionNameNew\"" -- $path_build_gradle
+    sed -i "s/versionName \"$versionNameAtual\"/versionName \"$versionNameNew\"/g" $path_build_gradle
+    # replace "\"version\": \"$versionNameAtual\"" "\"version\": \"$versionNameNew\"" -- $path_package
+    sed -i "s/\"version\": \"$versionNameAtual\"/\"version\": \"$versionNameNew\"/g" $path_package
+  fi;
+  break;
+  done
+fi;
+
+# Validando tipo de build
+if [ $type = 'production' ]; then
+  echo Enable Production mode
+  cd $path
+  git add .
+  git commit -m 'Sync by script' --no-edit
+  git pull
+  git push
+
+  git checkout master
+  git pull
+  # replace "let productionStatus = false;" "let productionStatus = true;" -- $path_config
+  sed -i "s/let productionStatus = false;/let productionStatus = true;/g" $path_config
+  # replace "let homologationStatus = true;" "let homologationStatus = false;" -- $path_config
+  sed -i "s/let homologationStatus = true;/let homologationStatus = false;/g" $path_config
+elif [ $type = 'homologation' ]; then
+  echo Enable Homologation mode
+  cd $path
+  git add .
+  git commit -m 'Sync by script' --no-edit
+  git pull
+  git push
+
+  git checkout homologation
+  git pull
+
+  # replace "let productionStatus = true;" "let productionStatus = false;" -- $path_config
+  sed -i "s/let productionStatus = true;/let productionStatus = false;/g" $path_config
+  # replace "let homologationStatus = false;" "let homologationStatus = true;" -- $path_config
+  sed -i "s/let homologationStatus = false;/let homologationStatus = true;/g" $path_config
+else
+  echo "::: TIPO NAO IDENTIFICADO"
+  echo "::: FINALIZANDO FLUXO"
+  exit
+fi;
+
+# echo Removendo node_modules
+rm -rf ./node_modules
+
+# echo Removendo yarn.lock
+rm yarn.lock
+
+echo Rodando yarn install
+npm cache clean --force
+yarn install
+
+echo Rodando npx jetify
+npx jetify
+
+echo Enable Spearate Build
+# replace "def enableSeparateBuildPerCPUArchitecture = false" "def enableSeparateBuildPerCPUArchitecture = true" -- $path_build_gradle
+sed -i "s/def enableSeparateBuildPerCPUArchitecture = false/def enableSeparateBuildPerCPUArchitecture = true/g" $path_build_gradle
+# replace "def enableProguardInReleaseBuilds = true" "def enableProguardInReleaseBuilds = false" -- ${path_build_gradle}
+sed -i "s/def enableProguardInReleaseBuilds = true/def enableProguardInReleaseBuilds = false/g" $path_build_gradle
+
+echo Rodando ./gradlew clean
+cd "${path}/android"
+./gradlew clean
+
+echo Gerando a build
+./gradlew assembleRelease
+
+echo Build gerado com sucesso...
+echo "VersionCode novo: $versionCodeNew, VersionName novo: $versionNameNew."
+xdg-open "${path}${path_apk}"
+
+# return developer branch
+git reset --hard
+git checkout developer
